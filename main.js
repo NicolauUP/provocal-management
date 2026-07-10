@@ -1,15 +1,12 @@
 function gerarResumo() {
 
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const responseSheet = spreadsheet.getSheetByName("Form_Responses");
+  const responseSheet = spreadsheet.getSheetByName(SHEETS.RESPONSES);
 
   if (!responseSheet) {
-    throw new Error("Folha 'Form_Responses' não encontrada.");
+    throw new Error(`Não existe a folha "${SHEETS.RESPONSES}".`);
   }
 
-  // Intervalo de datas a considerar
-  const startDate = new Date(2026, 4, 1); // 1 Maio
-  const endDate   = new Date(2026, 5, 30); // 30 Junho
 
   const data = responseSheet.getDataRange().getValues();
 
@@ -21,10 +18,10 @@ function gerarResumo() {
   // Criar ou limpar folha Resumo
   //-----------------------------
 
-  let summarySheet = spreadsheet.getSheetByName("Resumo");
+  let summarySheet = spreadsheet.getSheetByName(SHEETS.SUMMARY);
 
   if (!summarySheet) {
-    summarySheet = spreadsheet.insertSheet("Resumo");
+    summarySheet = spreadsheet.insertSheet(SHEETS.SUMMARY);
   } else {
     summarySheet.clear();
   }
@@ -48,7 +45,7 @@ function gerarResumo() {
 
     const rehearsalDate = new Date(data[rehearsal + 1][1]);
 
-    if (rehearsalDate < startDate || rehearsalDate > endDate) {
+    if (rehearsalDate < START_DATE || rehearsalDate > END_DATE) {
       continue;
     }
 
@@ -91,20 +88,14 @@ function gerarResumo() {
 
       const rehearsalDate = new Date(data[rehearsal + 1][1]);
 
-      if (rehearsalDate < startDate || rehearsalDate > endDate) {
+      if (rehearsalDate < START_DATE || rehearsalDate > END_DATE) {
         continue;
       }
 
       const state = data[rehearsal + 1][column];
 
-      let points = 0;
 
-      if (state == "Presente") {
-        points = 5;
-      }
-      else if (state == "Atraso") {
-        points = 4;
-      }
+      const point = POINTS[state] || 0;
 
       totalPoints += points;
 
