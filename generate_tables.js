@@ -8,6 +8,7 @@ function gerarResumo() {
   }
 
 
+  const lastColumn = responseSheet.getLastColumn();
   const data = responseSheet.getDataRange().getValues();
 
   if (data.length < 2) {
