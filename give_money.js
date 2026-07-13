@@ -22,11 +22,16 @@ const DISTRIBUICAO_CONFIG = {
    */
   dataLimitePreWCG: new Date(2026, 4, 1),
 
+  pesoAtividades: 0.75,
   valores: {
     estadoAtivo: "Ativo",
     tipoConcerto: "Concerto",
-    presencaValida: "Presente"
+    tipoEnsaio: "Ensaio",
+    presente: "Presente",
+    atraso: "Atraso",
+    falta: "Falta"
   },
+  
 
   cabecalhos: {
     membros: {
@@ -46,6 +51,13 @@ const DISTRIBUICAO_CONFIG = {
         "Tipo de Atividade",
         "Tipo de atividade",
         "Tipo da Atividade"
+      ],
+
+      dataAtividade: [
+        "Data ",
+        "Data da Atividade",
+        "Data de Atividade",
+        "Data do Ensaio:"
       ]
     },
 
@@ -53,6 +65,8 @@ const DISTRIBUICAO_CONFIG = {
       ordem: "Ordem",
       nome: "Nome",
       valorPreWCG: "Valor Caixa Antes WCG",
+      atividades: "Atividades",
+      assiduidade: "Assiduidade",
       pontos: "Pontos",
       valorFundoComum: "Valor Fundo Comum",
       valorIndividual: "Valor Individual",
@@ -112,24 +126,37 @@ function gerarDistribuicao() {
     membrosPreWCG.map(membro => membro.chaveNome)
   );
 
-  const pontosPorMembro = contarPontosConcertos_(
+const metricasPorMembro =
+  calcularMetricasParticipacao_(
     spreadsheet,
     membros
   );
 
-  const totalPontos = membros.reduce(
-    (soma, membro) =>
-      soma + (pontosPorMembro[membro.chaveNome] || 0),
-    0
-  );
+const totalPontos = membros.reduce(
+  (soma, membro) => {
+    const metricas =
+      metricasPorMembro[membro.chaveNome];
+
+    return soma + (metricas?.pontos || 0);
+  },
+  0
+);
 
   const valoresManuais = lerValoresManuaisExistentes_(
     spreadsheet
   );
 
   const linhas = membros.map(membro => {
-    const pontos =
-      pontosPorMembro[membro.chaveNome] || 0;
+    const metricas =
+    metricasPorMembro[membro.chaveNome] || {
+    atividades: 0,
+    assiduidade: 0,
+    pontos: 0
+  };
+
+    const atividades = metricas.atividades;
+    const assiduidade = metricas.assiduidade;
+    const pontos = metricas.pontos;
 
     const valorPreWCG =
       chavesMembrosPreWCG.has(membro.chaveNome)
@@ -148,6 +175,8 @@ function gerarDistribuicao() {
       ordem: membro.ordem,
       nome: membro.nome,
       valorPreWCG: valorPreWCG,
+      atividades: atividades,  
+      assiduidade: assiduidade,
       pontos: pontos,
       valorFundoComum: valorFundoComum,
       valorIndividual:
@@ -385,14 +414,17 @@ function calcularSaldoMovimentos_(
  */
 
 /**
- * Conta um ponto por cada "Presente" numa linha cujo
- * Tipo de Atividade seja "Concerto".
+ * Calcula, para cada membro ativo:
  *
- * Os nomes dos membros são obtidos dos cabeçalhos:
- *
- * Registo de Presenças [Nome do Membro]
+ * - Atividades: número de concertos em que esteve Presente
+ * - Assiduidade:
+ *     pontos obtidos nos ensaios /
+ *     pontos máximos dos ensaios desde a data de entrada
+ * - Pontos:
+ *     Atividades ×
+ *     (pesoAtividades + (1 - pesoAtividades) × Assiduidade)
  */
-function contarPontosConcertos_(
+function calcularMetricasParticipacao_(
   spreadsheet,
   membros
 ) {
@@ -407,14 +439,20 @@ function contarPontosConcertos_(
   const ultimaLinha = folha.getLastRow();
   const ultimaColuna = folha.getLastColumn();
 
-  const pontos = {};
+  const metricas = {};
 
   membros.forEach(membro => {
-    pontos[membro.chaveNome] = 0;
+    metricas[membro.chaveNome] = {
+      atividades: 0,
+      pontosEnsaios: 0,
+      ensaiosPossiveis: 0,
+      assiduidade: 0,
+      pontos: 0
+    };
   });
 
   if (ultimaLinha < 2 || ultimaColuna < 1) {
-    return pontos;
+    return metricas;
   }
 
   const dados = folha
@@ -422,6 +460,15 @@ function contarPontosConcertos_(
     .getValues();
 
   const cabecalhos = dados[0];
+
+  const indiceDataAtividade =
+    encontrarIndiceCabecalho_(
+      cabecalhos,
+      DISTRIBUICAO_CONFIG.cabecalhos.respostas
+        .dataAtividade,
+      true,
+      nomeFolha
+    );
 
   const indiceTipoAtividade =
     encontrarIndiceCabecalho_(
@@ -448,8 +495,7 @@ function contarPontosConcertos_(
       return;
     }
 
-    const chaveNome =
-      normalizarNome_(nomeExtraido);
+    const chaveNome = normalizarNome_(nomeExtraido);
 
     if (!membrosPorChave[chaveNome]) {
       return;
@@ -457,8 +503,7 @@ function contarPontosConcertos_(
 
     colunasPresencas.push({
       indiceColuna,
-      chaveNome,
-      nomeCabecalho: nomeExtraido
+      chaveNome
     });
   });
 
@@ -466,11 +511,27 @@ function contarPontosConcertos_(
     throw new Error(
       [
         `Não foram encontradas colunas de presenças válidas em "${nomeFolha}".`,
-        'Os cabeçalhos devem ter o formato:',
-        '"Registo de Presenças [Nome do Membro]".'
+        "Formato esperado:",
+        '"Registo de Presenças [Nome do Membro]"'
       ].join("\n")
     );
   }
+
+  const tipoConcerto = normalizarTexto_(
+    DISTRIBUICAO_CONFIG.valores.tipoConcerto
+  );
+
+  const tipoEnsaio = normalizarTexto_(
+    DISTRIBUICAO_CONFIG.valores.tipoEnsaio
+  );
+
+  const presente = normalizarTexto_(
+    DISTRIBUICAO_CONFIG.valores.presente
+  );
+
+  const atraso = normalizarTexto_(
+    DISTRIBUICAO_CONFIG.valores.atraso
+  );
 
   for (let i = 1; i < dados.length; i++) {
     const linha = dados[i];
@@ -479,40 +540,138 @@ function contarPontosConcertos_(
       continue;
     }
 
+    const dataAtividade =
+      converterData_(linha[indiceDataAtividade]);
+
+    if (
+      !(dataAtividade instanceof Date) ||
+      isNaN(dataAtividade.getTime())
+    ) {
+      continue;
+    }
+
     const tipoAtividade =
       normalizarTexto_(
         linha[indiceTipoAtividade]
       );
 
-    if (
-      tipoAtividade !==
-      normalizarTexto_(
-        DISTRIBUICAO_CONFIG.valores.tipoConcerto
-      )
-    ) {
-      continue;
-    }
-
     for (const coluna of colunasPresencas) {
-      const presenca =
+      const membro =
+        membrosPorChave[coluna.chaveNome];
+
+      if (!membro) {
+        continue;
+      }
+
+      /**
+       * O membro só pode ser contabilizado em atividades
+       * ocorridas na data de entrada ou depois dela.
+       */
+      if (
+        membro.entrada instanceof Date &&
+        !isNaN(membro.entrada.getTime()) &&
+        compararApenasData_(
+          dataAtividade,
+          membro.entrada
+        ) < 0
+      ) {
+        continue;
+      }
+
+      const resposta =
         normalizarTexto_(
           linha[coluna.indiceColuna]
         );
 
-      if (
-        presenca ===
-        normalizarTexto_(
-          DISTRIBUICAO_CONFIG.valores.presencaValida
-        )
-      ) {
-        pontos[coluna.chaveNome] += 1;
+      /**
+       * Concertos:
+       * Presente = 1 atividade.
+       */
+      if (tipoAtividade === tipoConcerto) {
+        if (resposta === presente) {
+          metricas[coluna.chaveNome].atividades += 1;
+        }
+
+        continue;
+      }
+
+      /**
+       * Ensaios:
+       * todos os ensaios posteriores à entrada entram no
+       * denominador, independentemente da resposta.
+       */
+      if (tipoAtividade === tipoEnsaio) {
+        metricas[coluna.chaveNome].ensaiosPossiveis += 1;
+
+        if (resposta === presente) {
+          metricas[coluna.chaveNome].pontosEnsaios += 5;
+        } else if (resposta === atraso) {
+          metricas[coluna.chaveNome].pontosEnsaios += 4;
+        }
       }
     }
   }
 
-  return pontos;
+  const pesoAtividades =
+    DISTRIBUICAO_CONFIG.pesoAtividades;
+
+  if (
+    typeof pesoAtividades !== "number" ||
+    pesoAtividades < 0 ||
+    pesoAtividades > 1
+  ) {
+    throw new Error(
+      "pesoAtividades deve ser um número entre 0 e 1."
+    );
+  }
+
+  membros.forEach(membro => {
+    const dadosMembro =
+      metricas[membro.chaveNome];
+
+    const maximoEnsaios =
+      dadosMembro.ensaiosPossiveis * 5;
+
+    dadosMembro.assiduidade =
+      maximoEnsaios > 0
+        ? dadosMembro.pontosEnsaios / maximoEnsaios
+        : 0;
+
+    dadosMembro.pontos =
+      dadosMembro.atividades *
+      (
+        pesoAtividades +
+        (1 - pesoAtividades) *
+        dadosMembro.assiduidade
+      );
+  });
+
+  return metricas;
 }
 
+/**
+ * Compara duas datas ignorando horas e minutos.
+ *
+ * Resultado:
+ * - negativo: dataA anterior a dataB
+ * - zero: mesmo dia
+ * - positivo: dataA posterior a dataB
+ */
+function compararApenasData_(dataA, dataB) {
+  const a = new Date(
+    dataA.getFullYear(),
+    dataA.getMonth(),
+    dataA.getDate()
+  );
+
+  const b = new Date(
+    dataB.getFullYear(),
+    dataB.getMonth(),
+    dataB.getDate()
+  );
+
+  return a.getTime() - b.getTime();
+}
 
 /**
  * Extrai o nome de:
@@ -651,6 +810,12 @@ function escreverDistribuicao_(
     folha = spreadsheet.insertSheet(nomeFolha);
   }
 
+  const filtroExistente = folha.getFilter();
+
+  if (filtroExistente) {
+    filtroExistente.remove();
+  }
+
   folha.clear();
 
   const h =
@@ -660,6 +825,8 @@ function escreverDistribuicao_(
     h.ordem,
     h.nome,
     h.valorPreWCG,
+    h.atividades,
+    h.assiduidade,
     h.pontos,
     h.valorFundoComum,
     h.valorIndividual,
@@ -676,6 +843,8 @@ function escreverDistribuicao_(
       linha.ordem,
       linha.nome,
       linha.valorPreWCG,
+      linha.atividades,
+      linha.assiduidade,
       linha.pontos,
       linha.valorFundoComum,
       linha.valorIndividual,
@@ -684,31 +853,42 @@ function escreverDistribuicao_(
     ]);
 
     folha
-      .getRange(2, 1, valores.length, valores[0].length)
+      .getRange(
+        2,
+        1,
+        valores.length,
+        valores[0].length
+      )
       .setValues(valores);
 
-    const formulasValorFinal = linhas.map(
-      (_, indice) => {
+    const formulasValorFinal =
+      linhas.map((_, indice) => {
         const linhaFolha = indice + 2;
 
         return [
-          `=SUM(C${linhaFolha};E${linhaFolha}:G${linhaFolha})`
+          `=SUM(C${linhaFolha};G${linhaFolha}:I${linhaFolha})`
         ];
-      }
-    );
+      });
 
     folha
-      .getRange(2, 8, formulasValorFinal.length, 1)
+      .getRange(
+        2,
+        10,
+        formulasValorFinal.length,
+        1
+      )
       .setFormulas(formulasValorFinal);
   }
 
   const linhaTotal = linhas.length + 2;
 
   folha
-    .getRange(linhaTotal, 1, 1, 8)
+    .getRange(linhaTotal, 1, 1, 10)
     .setValues([[
       "",
       "TOTAL",
+      "",
+      "",
       "",
       "",
       "",
@@ -731,12 +911,6 @@ function escreverDistribuicao_(
       );
 
     folha
-      .getRange(linhaTotal, 5)
-      .setFormula(
-        `=SUM(E2:E${linhaTotal - 1})`
-      );
-
-    folha
       .getRange(linhaTotal, 6)
       .setFormula(
         `=SUM(F2:F${linhaTotal - 1})`
@@ -752,6 +926,18 @@ function escreverDistribuicao_(
       .getRange(linhaTotal, 8)
       .setFormula(
         `=SUM(H2:H${linhaTotal - 1})`
+      );
+
+    folha
+      .getRange(linhaTotal, 9)
+      .setFormula(
+        `=SUM(I2:I${linhaTotal - 1})`
+      );
+
+    folha
+      .getRange(linhaTotal, 10)
+      .setFormula(
+        `=SUM(J2:J${linhaTotal - 1})`
       );
   }
 
@@ -780,12 +966,13 @@ function aplicarFormatacaoDistribuicao_(
   numeroMembros,
   linhaTotal
 ) {
-  const numeroLinhasDados = Math.max(numeroMembros, 1);
+  const numeroLinhasDados =
+    Math.max(numeroMembros, 1);
 
   folha.setFrozenRows(1);
 
   folha
-    .getRange(1, 1, 1, 8)
+    .getRange(1, 1, 1, 10)
     .setFontWeight("bold")
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle")
@@ -794,7 +981,7 @@ function aplicarFormatacaoDistribuicao_(
   folha.setRowHeight(1, 42);
 
   folha
-    .getRange(linhaTotal, 1, 1, 8)
+    .getRange(linhaTotal, 1, 1, 10)
     .setFontWeight("bold");
 
   folha
@@ -802,47 +989,73 @@ function aplicarFormatacaoDistribuicao_(
     .setHorizontalAlignment("center");
 
   folha
-    .getRange(2, 4, numeroLinhasDados, 1)
+    .getRange(2, 4, numeroLinhasDados, 3)
     .setHorizontalAlignment("center");
 
   if (numeroMembros > 0) {
+    // Valor Caixa Antes WCG
     folha
       .getRange(2, 3, numeroMembros, 1)
       .setNumberFormat('#,##0.00 "€"');
 
+    // Atividades
     folha
-      .getRange(2, 5, numeroMembros, 4)
+      .getRange(2, 4, numeroMembros, 1)
+      .setNumberFormat("0");
+
+    // Assiduidade
+    folha
+      .getRange(2, 5, numeroMembros, 1)
+      .setNumberFormat("0.0%");
+
+    // Pontos finais
+    folha
+      .getRange(2, 6, numeroMembros, 1)
+      .setNumberFormat("0.000");
+
+    // Fundo comum até valor final
+    folha
+      .getRange(2, 7, numeroMembros, 4)
       .setNumberFormat('#,##0.00 "€"');
   }
 
   folha
-    .getRange(linhaTotal, 3, 1, 1)
+    .getRange(linhaTotal, 3)
     .setNumberFormat('#,##0.00 "€"');
 
   folha
-    .getRange(linhaTotal, 5, 1, 4)
+    .getRange(linhaTotal, 4)
+    .setNumberFormat("0");
+
+  folha
+    .getRange(linhaTotal, 6)
+    .setNumberFormat("0.000");
+
+  folha
+    .getRange(linhaTotal, 7, 1, 4)
     .setNumberFormat('#,##0.00 "€"');
 
-  folha.autoResizeColumns(1, 8);
+  folha.autoResizeColumns(1, 10);
 
   folha.setColumnWidth(1, 70);
   folha.setColumnWidth(2, 190);
   folha.setColumnWidth(3, 155);
-  folha.setColumnWidth(4, 80);
-  folha.setColumnWidth(5, 150);
-  folha.setColumnWidth(6, 135);
-  folha.setColumnWidth(7, 120);
-  folha.setColumnWidth(8, 120);
+  folha.setColumnWidth(4, 90);
+  folha.setColumnWidth(5, 105);
+  folha.setColumnWidth(6, 90);
+  folha.setColumnWidth(7, 150);
+  folha.setColumnWidth(8, 135);
+  folha.setColumnWidth(9, 120);
+  folha.setColumnWidth(10, 120);
 
   folha
-    .getRange(1, 1, linhaTotal, 8)
+    .getRange(1, 1, linhaTotal, 10)
     .setVerticalAlignment("middle");
 
   folha
-    .getRange(1, 1, linhaTotal, 8)
+    .getRange(1, 1, linhaTotal, 10)
     .createFilter();
 }
-
 
 /**
  * Escreve alguns dados de controlo abaixo da tabela.
