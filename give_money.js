@@ -1294,6 +1294,10 @@ function onOpen() {
       "Atualizar distribuição",
       "gerarDistribuicao"
     )
+    .addItem(
+      "Gerar mapa mensal",
+      "gerarMapaAssiduidadeMensal"
+    )
     .addToUi();
 }
 

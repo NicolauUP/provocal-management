@@ -16,6 +16,7 @@ O objetivo é automatizar o registo de presenças, calcular assiduidade e pontua
 - Integração de ensaios gerais e de naipe
 - Contagem de concertos desde 01/05/2026
 - Distribuição proporcional do fundo comum
+- Mapas mensais de assiduidade com pontos por ensaio
 - Formatação automática da folha de resumo
 - Conditional Formatting
 - Desenvolvimento local com VS Code + clasp

@@ -17,6 +17,7 @@ A mesma análise alimenta:
 
 - `gerarDistribuicao`;
 - `gerarResumo`;
+- `gerarMapaAssiduidadeMensal`;
 - `diagnosticarAssiduidade`.
 
 ## Regras consolidadas

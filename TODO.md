@@ -15,5 +15,6 @@
 ## Melhorias futuras
 
 - [ ] Adicionar testes automatizados executáveis no ambiente Apps Script.
+- [ ] Adicionar filtros ou gráficos aos mapas mensais de assiduidade.
 - [ ] Avaliar uma chave estável de membro que não dependa do nome.
 - [ ] Confirmar botões, macros e acionadores externos ao repositório.
