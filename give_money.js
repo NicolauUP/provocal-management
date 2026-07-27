@@ -6,21 +6,22 @@
 
 const DISTRIBUICAO_CONFIG = {
   folhas: {
-    membros: "Membros",
-    movimentosPreWCG: "Movimento_PREWCG",
-    movimentos: "Movimentos",
-    respostas: "Form_Responses",
-    distribuicao: "Distribuição"
+    get membros() {
+      return SHEETS.MEMBERS;
+    },
+    get movimentos() {
+      return SHEETS.MOVEMENTS;
+    },
+    get presencasGerais() {
+      return SHEETS.GENERAL_ATTENDANCE;
+    },
+    get ensaiosNaipe() {
+      return SHEETS.SECTION_ATTENDANCE;
+    },
+    get distribuicao() {
+      return SHEETS.DISTRIBUTION;
+    }
   },
-
-  /**
-   * Membros com data de entrada anterior a esta data
-   * recebem a divisão da caixa pré-WCG.
-   *
-   * new Date(ano, mês-1, dia)
-   * Maio = 4 porque os meses começam em zero.
-   */
-  dataLimitePreWCG: new Date(2026, 4, 1),
 
   pesoAtividades: 0.75,
   valores: {
@@ -46,7 +47,8 @@ const DISTRIBUICAO_CONFIG = {
       despesa: ["Despesa"]
     },
 
-    respostas: {
+    presencas: {
+      timestamp: ["Timestamp"],
       tipoAtividade: [
         "Tipo de Atividade",
         "Tipo de atividade",
@@ -64,7 +66,6 @@ const DISTRIBUICAO_CONFIG = {
     distribuicao: {
       ordem: "Ordem",
       nome: "Nome",
-      valorPreWCG: "Valor Caixa Antes WCG",
       atividades: "Atividades",
       assiduidade: "Assiduidade",
       pontos: "Pontos",
@@ -101,36 +102,17 @@ function gerarDistribuicao() {
     );
   }
 
-  const saldoPreWCG = calcularSaldoMovimentos_(
-    spreadsheet,
-    DISTRIBUICAO_CONFIG.folhas.movimentosPreWCG
-  );
-
   const saldoFundoComum = calcularSaldoMovimentos_(
     spreadsheet,
     DISTRIBUICAO_CONFIG.folhas.movimentos
   );
 
-  const membrosPreWCG = membros.filter(membro =>
-    membro.entrada instanceof Date &&
-    !isNaN(membro.entrada.getTime()) &&
-    membro.entrada < DISTRIBUICAO_CONFIG.dataLimitePreWCG
-  );
-
-  const valorPreWCGPorMembro =
-    membrosPreWCG.length > 0
-      ? saldoPreWCG / membrosPreWCG.length
-      : 0;
-
-  const chavesMembrosPreWCG = new Set(
-    membrosPreWCG.map(membro => membro.chaveNome)
-  );
-
-const metricasPorMembro =
-  calcularMetricasParticipacao_(
+  const analiseParticipacao =
+  analisarParticipacao_(
     spreadsheet,
     membros
   );
+  const metricasPorMembro = analiseParticipacao.metricas;
 
 const totalPontos = membros.reduce(
   (soma, membro) => {
@@ -158,11 +140,6 @@ const totalPontos = membros.reduce(
     const assiduidade = metricas.assiduidade;
     const pontos = metricas.pontos;
 
-    const valorPreWCG =
-      chavesMembrosPreWCG.has(membro.chaveNome)
-        ? valorPreWCGPorMembro
-        : 0;
-
     const valorFundoComum =
       totalPontos > 0
         ? pontos * saldoFundoComum / totalPontos
@@ -174,7 +151,6 @@ const totalPontos = membros.reduce(
     return {
       ordem: membro.ordem,
       nome: membro.nome,
-      valorPreWCG: valorPreWCG,
       atividades: atividades,  
       assiduidade: assiduidade,
       pontos: pontos,
@@ -190,10 +166,9 @@ const totalPontos = membros.reduce(
     spreadsheet,
     linhas,
     {
-      saldoPreWCG,
       saldoFundoComum,
       totalPontos,
-      numeroMembrosPreWCG: membrosPreWCG.length
+      fontesOmitidas: analiseParticipacao.fontesOmitidas
     }
   );
 
@@ -203,10 +178,11 @@ const totalPontos = membros.reduce(
     "Distribuição atualizada",
     [
       `Membros ativos: ${membros.length}`,
-      `Membros elegíveis pré-WCG: ${membrosPreWCG.length}`,
       `Total de pontos: ${totalPontos}`,
-      `Caixa pré-WCG: ${formatarEuro_(saldoPreWCG)}`,
-      `Fundo comum: ${formatarEuro_(saldoFundoComum)}`
+      `Fundo comum: ${formatarEuro_(saldoFundoComum)}`,
+      analiseParticipacao.fontesOmitidas.length > 0
+        ? `Aviso — folhas ainda ausentes: ${analiseParticipacao.fontesOmitidas.join(", ")}`
+        : "Todas as fontes de presenças foram processadas."
     ].join("\n"),
     SpreadsheetApp.getUi().ButtonSet.OK
   );
@@ -428,20 +404,28 @@ function calcularMetricasParticipacao_(
   spreadsheet,
   membros
 ) {
-  const nomeFolha =
-    DISTRIBUICAO_CONFIG.folhas.respostas;
+  return analisarParticipacao_(spreadsheet, membros).metricas;
+}
 
-  const folha = obterFolhaObrigatoria_(
-    spreadsheet,
-    nomeFolha
-  );
-
-  const ultimaLinha = folha.getLastRow();
-  const ultimaColuna = folha.getLastColumn();
-
+/**
+ * Lê todas as fontes de presença e devolve métricas, detalhes
+ * de diagnóstico e a lista de folhas opcionais ainda ausentes.
+ */
+function analisarParticipacao_(spreadsheet, membros) {
   const metricas = {};
+  const detalhes = [];
+  const avisos = [];
+  const fontesOmitidas = [];
+  const membrosPorChave = {};
 
   membros.forEach(membro => {
+    if (membrosPorChave[membro.chaveNome]) {
+      throw new Error(
+        `Existem dois membros ativos com o mesmo nome normalizado: "${membro.nome}".`
+      );
+    }
+
+    membrosPorChave[membro.chaveNome] = membro;
     metricas[membro.chaveNome] = {
       atividades: 0,
       pontosEnsaios: 0,
@@ -451,166 +435,50 @@ function calcularMetricasParticipacao_(
     };
   });
 
-  if (ultimaLinha < 2 || ultimaColuna < 1) {
-    return metricas;
-  }
-
-  const dados = folha
-    .getRange(1, 1, ultimaLinha, ultimaColuna)
-    .getValues();
-
-  const cabecalhos = dados[0];
-
-  const indiceDataAtividade =
-    encontrarIndiceCabecalho_(
-      cabecalhos,
-      DISTRIBUICAO_CONFIG.cabecalhos.respostas
-        .dataAtividade,
-      true,
-      nomeFolha
-    );
-
-  const indiceTipoAtividade =
-    encontrarIndiceCabecalho_(
-      cabecalhos,
-      DISTRIBUICAO_CONFIG.cabecalhos.respostas
-        .tipoAtividade,
-      true,
-      nomeFolha
-    );
-
-  const membrosPorChave = {};
-
-  membros.forEach(membro => {
-    membrosPorChave[membro.chaveNome] = membro;
-  });
-
-  const colunasPresencas = [];
-
-  cabecalhos.forEach((cabecalho, indiceColuna) => {
-    const nomeExtraido =
-      extrairNomeCabecalhoPresenca_(cabecalho);
-
-    if (!nomeExtraido) {
-      return;
+  const fonteGeral = lerFontePresencas_(
+    spreadsheet,
+    DISTRIBUICAO_CONFIG.folhas.presencasGerais,
+    {
+      tipo: "geral",
+      obrigatoria: true,
+      membrosPorChave
     }
-
-    const chaveNome = normalizarNome_(nomeExtraido);
-
-    if (!membrosPorChave[chaveNome]) {
-      return;
-    }
-
-    colunasPresencas.push({
-      indiceColuna,
-      chaveNome
-    });
-  });
-
-  if (colunasPresencas.length === 0) {
-    throw new Error(
-      [
-        `Não foram encontradas colunas de presenças válidas em "${nomeFolha}".`,
-        "Formato esperado:",
-        '"Registo de Presenças [Nome do Membro]"'
-      ].join("\n")
-    );
-  }
-
-  const tipoConcerto = normalizarTexto_(
-    DISTRIBUICAO_CONFIG.valores.tipoConcerto
   );
 
-  const tipoEnsaio = normalizarTexto_(
-    DISTRIBUICAO_CONFIG.valores.tipoEnsaio
+  processarFontePresencas_(
+    fonteGeral,
+    membrosPorChave,
+    metricas,
+    detalhes,
+    avisos
   );
 
-  const presente = normalizarTexto_(
-    DISTRIBUICAO_CONFIG.valores.presente
-  );
-
-  const atraso = normalizarTexto_(
-    DISTRIBUICAO_CONFIG.valores.atraso
-  );
-
-  for (let i = 1; i < dados.length; i++) {
-    const linha = dados[i];
-
-    if (linhaCompletamenteVazia_(linha)) {
-      continue;
-    }
-
-    const dataAtividade =
-      converterData_(linha[indiceDataAtividade]);
-
-    if (
-      !(dataAtividade instanceof Date) ||
-      isNaN(dataAtividade.getTime())
-    ) {
-      continue;
-    }
-
-    const tipoAtividade =
-      normalizarTexto_(
-        linha[indiceTipoAtividade]
+  DISTRIBUICAO_CONFIG.folhas.ensaiosNaipe
+    .forEach(nomeFolha => {
+      const fonte = lerFontePresencas_(
+        spreadsheet,
+        nomeFolha,
+        {
+          tipo: "naipe",
+          obrigatoria: false,
+          membrosPorChave
+        }
       );
 
-    for (const coluna of colunasPresencas) {
-      const membro =
-        membrosPorChave[coluna.chaveNome];
-
-      if (!membro) {
-        continue;
+      if (fonte.ausente) {
+        fontesOmitidas.push(nomeFolha);
+        avisos.push(fonte.aviso);
+        return;
       }
 
-      /**
-       * O membro só pode ser contabilizado em atividades
-       * ocorridas na data de entrada ou depois dela.
-       */
-      if (
-        membro.entrada instanceof Date &&
-        !isNaN(membro.entrada.getTime()) &&
-        compararApenasData_(
-          dataAtividade,
-          membro.entrada
-        ) < 0
-      ) {
-        continue;
-      }
-
-      const resposta =
-        normalizarTexto_(
-          linha[coluna.indiceColuna]
-        );
-
-      /**
-       * Concertos:
-       * Presente = 1 atividade.
-       */
-      if (tipoAtividade === tipoConcerto) {
-        if (resposta === presente) {
-          metricas[coluna.chaveNome].atividades += 1;
-        }
-
-        continue;
-      }
-
-      /**
-       * Ensaios:
-       * todos os ensaios posteriores à entrada entram no
-       * denominador, independentemente da resposta.
-       */
-      if (tipoAtividade === tipoEnsaio) {
-        metricas[coluna.chaveNome].ensaiosPossiveis += 1;
-
-        if (resposta === presente) {
-          metricas[coluna.chaveNome].pontosEnsaios += 5;
-        } else if (resposta === atraso) {
-          metricas[coluna.chaveNome].pontosEnsaios += 4;
-        }
-      }
-    }
-  }
+      processarFontePresencas_(
+        fonte,
+        membrosPorChave,
+        metricas,
+        detalhes,
+        avisos
+      );
+    });
 
   const pesoAtividades =
     DISTRIBUICAO_CONFIG.pesoAtividades;
@@ -646,7 +514,334 @@ function calcularMetricasParticipacao_(
       );
   });
 
-  return metricas;
+  avisos.forEach(aviso => Logger.log(aviso));
+
+  return {
+    metricas,
+    detalhes,
+    avisos,
+    fontesOmitidas
+  };
+}
+
+/**
+ * Lê e valida uma fonte com Timestamp | Data | membros...
+ * A fonte geral exige adicionalmente Tipo de atividade.
+ */
+function lerFontePresencas_(
+  spreadsheet,
+  nomeFolha,
+  opcoes
+) {
+  const folha = spreadsheet.getSheetByName(nomeFolha);
+
+  if (!folha) {
+    if (!opcoes.obrigatoria) {
+      return {
+        ausente: true,
+        aviso: `A folha opcional "${nomeFolha}" ainda não existe e foi omitida.`
+      };
+    }
+
+    throw new Error(`Não existe a folha obrigatória "${nomeFolha}".`);
+  }
+
+  const ultimaLinha = folha.getLastRow();
+  const ultimaColuna = folha.getLastColumn();
+
+  if (ultimaLinha < 1 || ultimaColuna < 1) {
+    if (!opcoes.obrigatoria) {
+      return {
+        ausente: true,
+        aviso: `A folha opcional "${nomeFolha}" está vazia e foi omitida.`
+      };
+    }
+
+    throw new Error(`A folha "${nomeFolha}" não contém cabeçalhos.`);
+  }
+
+  const dados = folha
+    .getRange(1, 1, Math.max(ultimaLinha, 1), ultimaColuna)
+    .getValues();
+  const cabecalhos = dados[0];
+  const configCabecalhos = DISTRIBUICAO_CONFIG.cabecalhos.presencas;
+
+  const indiceTimestamp = encontrarIndiceCabecalho_(
+    cabecalhos,
+    configCabecalhos.timestamp,
+    true,
+    nomeFolha
+  );
+  const indiceData = encontrarIndiceCabecalho_(
+    cabecalhos,
+    configCabecalhos.dataAtividade,
+    true,
+    nomeFolha
+  );
+  const indiceTipo = opcoes.tipo === "geral"
+    ? encontrarIndiceCabecalho_(
+        cabecalhos,
+        configCabecalhos.tipoAtividade,
+        true,
+        nomeFolha
+      )
+    : -1;
+
+  const indicesMetadados = new Set([
+    indiceTimestamp,
+    indiceData,
+    indiceTipo
+  ]);
+  const colunasPresencas = [];
+  const chavesEncontradas = new Set();
+  const nomesDesconhecidos = [];
+
+  cabecalhos.forEach((cabecalho, indiceColuna) => {
+    if (indicesMetadados.has(indiceColuna)) {
+      return;
+    }
+
+    const nomeExtraido = extrairNomeCabecalhoPresenca_(cabecalho);
+
+    if (!nomeExtraido) {
+      return;
+    }
+
+    const chaveNome = normalizarNome_(nomeExtraido);
+
+    if (!opcoes.membrosPorChave[chaveNome]) {
+      nomesDesconhecidos.push(nomeExtraido);
+      return;
+    }
+
+    if (chavesEncontradas.has(chaveNome)) {
+      throw new Error(
+        `A folha "${nomeFolha}" contém mais de uma coluna para "${nomeExtraido}".`
+      );
+    }
+
+    chavesEncontradas.add(chaveNome);
+    colunasPresencas.push({
+      indiceColuna,
+      chaveNome,
+      nomeCabecalho: nomeExtraido
+    });
+  });
+
+  if (colunasPresencas.length === 0) {
+    if (opcoes.obrigatoria) {
+      throw new Error(
+        `Não foram encontradas colunas de membros ativos em "${nomeFolha}".`
+      );
+    }
+
+  }
+
+  return {
+    ausente: false,
+    nomeFolha,
+    tipo: opcoes.tipo,
+    dados,
+    indiceData,
+    indiceTipo,
+    colunasPresencas,
+    nomesDesconhecidos,
+    semMembrosAtivos: colunasPresencas.length === 0
+  };
+}
+
+function processarFontePresencas_(
+  fonte,
+  membrosPorChave,
+  metricas,
+  detalhes,
+  avisos
+) {
+  if (fonte.semMembrosAtivos) {
+    avisos.push(
+      `A folha "${fonte.nomeFolha}" não contém colunas correspondentes a membros ativos.`
+    );
+  }
+
+  fonte.nomesDesconhecidos.forEach(nome => {
+    avisos.push(
+      `A folha "${fonte.nomeFolha}" contém o membro desconhecido "${nome}".`
+    );
+  });
+
+  for (let i = 1; i < fonte.dados.length; i++) {
+    const linha = fonte.dados[i];
+
+    if (linhaCompletamenteVazia_(linha)) {
+      continue;
+    }
+
+    const dataOriginal = linha[fonte.indiceData];
+    const dataAtividade = converterData_(dataOriginal);
+    const dataValida =
+      dataAtividade instanceof Date &&
+      !isNaN(dataAtividade.getTime());
+    const tipoOriginal = fonte.tipo === "naipe"
+      ? DISTRIBUICAO_CONFIG.valores.tipoEnsaio
+      : String(linha[fonte.indiceTipo] ?? "").trim();
+    const tipoNormalizado = fonte.tipo === "naipe"
+      ? normalizarTexto_(DISTRIBUICAO_CONFIG.valores.tipoEnsaio)
+      : normalizarTexto_(tipoOriginal);
+    const tipoRegisto = fonte.tipo === "naipe"
+      ? "Ensaio de naipe"
+      : tipoOriginal;
+
+    for (const coluna of fonte.colunasPresencas) {
+      const membro = membrosPorChave[coluna.chaveNome];
+      const respostaOriginal = String(
+        linha[coluna.indiceColuna] ?? ""
+      ).trim();
+      const resultado = avaliarRegistoPresenca_({
+        fonte: fonte.nomeFolha,
+        linha: i + 1,
+        dataAtividade,
+        dataValida,
+        tipoNormalizado,
+        tipoRegisto,
+        respostaOriginal,
+        membro,
+        origemNaipe: fonte.tipo === "naipe"
+      });
+
+      if (resultado.contaComoAtividade) {
+        metricas[coluna.chaveNome].atividades += 1;
+      }
+
+      if (resultado.entraDenominador) {
+        metricas[coluna.chaveNome].ensaiosPossiveis += 1;
+        metricas[coluna.chaveNome].pontosEnsaios +=
+          resultado.pontosObtidos;
+      }
+
+      detalhes.push(resultado);
+
+      if (resultado.gerarAviso) {
+        avisos.push(
+          `${fonte.nomeFolha}, linha ${i + 1}, ${membro.nome}: ${resultado.motivo}`
+        );
+      }
+    }
+  }
+}
+
+function avaliarRegistoPresenca_(dados) {
+  const respostaNormalizada = normalizarTexto_(dados.respostaOriginal);
+  const presente = normalizarTexto_(
+    DISTRIBUICAO_CONFIG.valores.presente
+  );
+  const atraso = normalizarTexto_(
+    DISTRIBUICAO_CONFIG.valores.atraso
+  );
+  const falta = normalizarTexto_(
+    DISTRIBUICAO_CONFIG.valores.falta
+  );
+  const tipoConcerto = normalizarTexto_(
+    DISTRIBUICAO_CONFIG.valores.tipoConcerto
+  );
+  const tipoEnsaio = normalizarTexto_(
+    DISTRIBUICAO_CONFIG.valores.tipoEnsaio
+  );
+
+  let entraCalculo = false;
+  let entraNumerador = false;
+  let entraDenominador = false;
+  let pontosObtidos = 0;
+  let pontosMaximos = 0;
+  let contaComoAtividade = false;
+  let motivo = "";
+  let gerarAviso = false;
+
+  if (!dados.dataValida) {
+    motivo = "Data inválida: registo ignorado";
+    gerarAviso = true;
+  } else if (dados.tipoNormalizado === tipoConcerto) {
+    if (
+      compararApenasData_(
+        dados.dataAtividade,
+        ACTIVITIES_START_DATE
+      ) < 0
+    ) {
+      motivo = "Concerto anterior a 01/05/2026";
+    } else if (respostaNormalizada === presente) {
+      entraCalculo = true;
+      contaComoAtividade = true;
+      motivo = "Concerto presente: conta como atividade";
+    } else if (
+      !respostaNormalizada ||
+      respostaNormalizada === falta
+    ) {
+      entraCalculo = true;
+      motivo = "Concerto sem presença: não conta como atividade";
+    } else {
+      entraCalculo = true;
+      motivo = `Resposta inesperada em concerto: "${dados.respostaOriginal}"`;
+      gerarAviso = true;
+    }
+  } else if (dados.tipoNormalizado === tipoEnsaio) {
+    const entradaValida =
+      dados.membro.entrada instanceof Date &&
+      !isNaN(dados.membro.entrada.getTime());
+
+    if (!entradaValida) {
+      motivo = "Data de entrada inválida: ensaio ignorado";
+      gerarAviso = true;
+    } else if (
+      compararApenasData_(
+        dados.dataAtividade,
+        dados.membro.entrada
+      ) < 0
+    ) {
+      motivo = "Ensaio anterior à entrada";
+    } else {
+      entraCalculo = true;
+      entraNumerador = true;
+      entraDenominador = true;
+      pontosMaximos = 5;
+
+      if (respostaNormalizada === presente) {
+        pontosObtidos = 5;
+        motivo = "Presente";
+      } else if (respostaNormalizada === atraso) {
+        pontosObtidos = 4;
+        motivo = "Atraso";
+      } else if (!respostaNormalizada) {
+        motivo = "Resposta vazia: conta como 0";
+      } else if (respostaNormalizada === falta) {
+        motivo = "Falta";
+      } else {
+        motivo = `Resposta inesperada: "${dados.respostaOriginal}", conta como 0`;
+        gerarAviso = true;
+      }
+    }
+  } else {
+    motivo = `Tipo de atividade inesperado: "${dados.tipoRegisto}"`;
+    gerarAviso = true;
+  }
+
+  return {
+    folha: dados.fonte,
+    linha: dados.linha,
+    data: dados.dataValida ? dados.dataAtividade : null,
+    tipoRegisto: dados.tipoRegisto,
+    ehEnsaio: dados.tipoNormalizado === tipoEnsaio,
+    nomeMembro: dados.membro.nome,
+    chaveNome: dados.membro.chaveNome,
+    resposta: dados.respostaOriginal,
+    dataEntrada: dados.membro.entrada,
+    entraCalculo,
+    entraNumerador,
+    entraDenominador,
+    pontosObtidos,
+    pontosMaximos,
+    contaComoAtividade,
+    motivo,
+    gerarAviso
+  };
 }
 
 /**
@@ -685,11 +880,11 @@ function extrairNomeCabecalhoPresenca_(cabecalho) {
     /^Registo\s+de\s+Presenças\s*\[(.+?)\]\s*$/i
   );
 
-  if (!correspondencia) {
-    return null;
+  if (correspondencia) {
+    return correspondencia[1].trim();
   }
 
-  return correspondencia[1].trim();
+  return texto || null;
 }
 
 
@@ -824,7 +1019,6 @@ function escreverDistribuicao_(
   const cabecalhos = [
     h.ordem,
     h.nome,
-    h.valorPreWCG,
     h.atividades,
     h.assiduidade,
     h.pontos,
@@ -842,7 +1036,6 @@ function escreverDistribuicao_(
     const valores = linhas.map(linha => [
       linha.ordem,
       linha.nome,
-      linha.valorPreWCG,
       linha.atividades,
       linha.assiduidade,
       linha.pontos,
@@ -866,14 +1059,14 @@ function escreverDistribuicao_(
         const linhaFolha = indice + 2;
 
         return [
-          `=SUM(C${linhaFolha};G${linhaFolha}:I${linhaFolha})`
+          `=SUM(F${linhaFolha}:H${linhaFolha})`
         ];
       });
 
     folha
       .getRange(
         2,
-        10,
+        9,
         formulasValorFinal.length,
         1
       )
@@ -883,11 +1076,10 @@ function escreverDistribuicao_(
   const linhaTotal = linhas.length + 2;
 
   folha
-    .getRange(linhaTotal, 1, 1, 10)
+    .getRange(linhaTotal, 1, 1, 9)
     .setValues([[
       "",
       "TOTAL",
-      "",
       "",
       "",
       "",
@@ -905,9 +1097,9 @@ function escreverDistribuicao_(
       );
 
     folha
-      .getRange(linhaTotal, 4)
+      .getRange(linhaTotal, 5)
       .setFormula(
-        `=SUM(D2:D${linhaTotal - 1})`
+        `=SUM(E2:E${linhaTotal - 1})`
       );
 
     folha
@@ -932,12 +1124,6 @@ function escreverDistribuicao_(
       .getRange(linhaTotal, 9)
       .setFormula(
         `=SUM(I2:I${linhaTotal - 1})`
-      );
-
-    folha
-      .getRange(linhaTotal, 10)
-      .setFormula(
-        `=SUM(J2:J${linhaTotal - 1})`
       );
   }
 
@@ -972,7 +1158,7 @@ function aplicarFormatacaoDistribuicao_(
   folha.setFrozenRows(1);
 
   folha
-    .getRange(1, 1, 1, 10)
+    .getRange(1, 1, 1, 9)
     .setFontWeight("bold")
     .setHorizontalAlignment("center")
     .setVerticalAlignment("middle")
@@ -981,7 +1167,7 @@ function aplicarFormatacaoDistribuicao_(
   folha.setRowHeight(1, 42);
 
   folha
-    .getRange(linhaTotal, 1, 1, 10)
+    .getRange(linhaTotal, 1, 1, 9)
     .setFontWeight("bold");
 
   folha
@@ -989,71 +1175,61 @@ function aplicarFormatacaoDistribuicao_(
     .setHorizontalAlignment("center");
 
   folha
-    .getRange(2, 4, numeroLinhasDados, 3)
+    .getRange(2, 3, numeroLinhasDados, 3)
     .setHorizontalAlignment("center");
 
   if (numeroMembros > 0) {
-    // Valor Caixa Antes WCG
-    folha
-      .getRange(2, 3, numeroMembros, 1)
-      .setNumberFormat('#,##0.00 "€"');
-
     // Atividades
     folha
-      .getRange(2, 4, numeroMembros, 1)
+      .getRange(2, 3, numeroMembros, 1)
       .setNumberFormat("0");
 
     // Assiduidade
     folha
-      .getRange(2, 5, numeroMembros, 1)
+      .getRange(2, 4, numeroMembros, 1)
       .setNumberFormat("0.0%");
 
     // Pontos finais
     folha
-      .getRange(2, 6, numeroMembros, 1)
+      .getRange(2, 5, numeroMembros, 1)
       .setNumberFormat("0.000");
 
     // Fundo comum até valor final
     folha
-      .getRange(2, 7, numeroMembros, 4)
+      .getRange(2, 6, numeroMembros, 4)
       .setNumberFormat('#,##0.00 "€"');
   }
 
   folha
     .getRange(linhaTotal, 3)
-    .setNumberFormat('#,##0.00 "€"');
-
-  folha
-    .getRange(linhaTotal, 4)
     .setNumberFormat("0");
 
   folha
-    .getRange(linhaTotal, 6)
+    .getRange(linhaTotal, 5)
     .setNumberFormat("0.000");
 
   folha
-    .getRange(linhaTotal, 7, 1, 4)
+    .getRange(linhaTotal, 6, 1, 4)
     .setNumberFormat('#,##0.00 "€"');
 
-  folha.autoResizeColumns(1, 10);
+  folha.autoResizeColumns(1, 9);
 
   folha.setColumnWidth(1, 70);
   folha.setColumnWidth(2, 190);
-  folha.setColumnWidth(3, 155);
-  folha.setColumnWidth(4, 90);
-  folha.setColumnWidth(5, 105);
-  folha.setColumnWidth(6, 90);
-  folha.setColumnWidth(7, 150);
-  folha.setColumnWidth(8, 135);
+  folha.setColumnWidth(3, 90);
+  folha.setColumnWidth(4, 105);
+  folha.setColumnWidth(5, 90);
+  folha.setColumnWidth(6, 150);
+  folha.setColumnWidth(7, 135);
+  folha.setColumnWidth(8, 120);
   folha.setColumnWidth(9, 120);
-  folha.setColumnWidth(10, 120);
 
   folha
-    .getRange(1, 1, linhaTotal, 10)
+    .getRange(1, 1, linhaTotal, 9)
     .setVerticalAlignment("middle");
 
   folha
-    .getRange(1, 1, linhaTotal, 10)
+    .getRange(1, 1, linhaTotal, 9)
     .createFilter();
 }
 
@@ -1070,20 +1246,18 @@ function escreverResumoTecnico_(
   const dados = [
     ["Controlo", "Valor"],
     [
-      "Saldo Caixa Antes WCG",
-      resumo.saldoPreWCG
-    ],
-    [
-      "Número de membros pré-WCG",
-      resumo.numeroMembrosPreWCG
-    ],
-    [
       "Saldo Fundo Comum",
       resumo.saldoFundoComum
     ],
     [
       "Total de pontos",
       resumo.totalPontos
+    ],
+    [
+      "Fontes de naipe omitidas",
+      resumo.fontesOmitidas.length > 0
+        ? resumo.fontesOmitidas.join(", ")
+        : "Nenhuma"
     ]
   ];
 
@@ -1102,10 +1276,6 @@ function escreverResumoTecnico_(
 
   folha
     .getRange(linhaInicio + 1, 2)
-    .setNumberFormat('#,##0.00 "€"');
-
-  folha
-    .getRange(linhaInicio + 3, 2)
     .setNumberFormat('#,##0.00 "€"');
 }
 
@@ -1213,7 +1383,10 @@ function normalizarTexto_(valor) {
  * Normalização usada para associar nomes entre folhas.
  */
 function normalizarNome_(nome) {
-  return normalizarTexto_(nome);
+  return String(nome ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("pt-PT");
 }
 
 

@@ -13,7 +13,7 @@
 - Não alterar regras de negócio sem indicação explícita.
 - Não executar `clasp push` automaticamente.
 - Não apagar ou renomear folhas, colunas ou dados existentes.
-- Não alterar a folha `Form_Responses`.
+- Não alterar as folhas de presenças.
 - Preservar os valores manuais das colunas:
   - `Valor Individual`
   - `Valor Apoios`
@@ -23,8 +23,11 @@
 ## Folhas
 
 - `Membros`
-- `Form_Responses`
-- `Movimento_PREWCG`
+- `Presencas_Gerais`
+- `Ensaios_Sopranos`
+- `Ensaios_Contraltos`
+- `Ensaios_Tenores`
+- `Ensaios_Baixos`
 - `Movimentos`
 - `Distribuição`
 - `Resumo`
@@ -32,9 +35,9 @@
 ## Regras de negócio da distribuição
 
 - Apenas membros com `Estado = Ativo` entram nos cálculos.
-- O valor pré-WCG é dividido igualmente pelos membros ativos cuja data de entrada é anterior a 01/05/2026.
 - O saldo financeiro é `soma das receitas - soma das despesas`.
 - Em concertos:
+  - Só concertos em ou depois de 01/05/2026 podem contar.
   - `Presente` vale uma atividade.
   - Concertos nunca entram no cálculo da assiduidade.
 - Em ensaios:
@@ -49,7 +52,7 @@
 - `pesoAtividades` é uma variável de configuração, atualmente 0.75.
 - O fundo comum é distribuído proporcionalmente aos pontos finais.
 - Valor final é:
-  `Valor Caixa Antes WCG + Valor Fundo Comum + Valor Individual + Valor Apoios`.
+  `Valor Fundo Comum + Valor Individual + Valor Apoios`.
 
 ## Estilo pretendido
 

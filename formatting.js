@@ -120,12 +120,14 @@ function customizeSheet(sheet, numberOfMembers, validRehearsals) {
   // Formato das datas
   //-----------------------------
 
-  sheet.getRange(
-      1,
-      2,
-      1,
-      validRehearsals
-  ).setNumberFormat("dd/MM");
+  if (validRehearsals > 0) {
+    sheet.getRange(
+        1,
+        2,
+        1,
+        validRehearsals
+    ).setNumberFormat("dd/MM");
+  }
 
   //-----------------------------
   // Formato da percentagem
@@ -168,61 +170,63 @@ function applyConditionalFormatting(sheet, numberOfMembers, validRehearsals){
   // Pontos (5 = Verde)
   //-----------------------------
 
-  rules.push(
-    SpreadsheetApp.newConditionalFormatRule()
-      .whenNumberEqualTo(5)
-      .setBackground("#C6EFCE")
-      .setFontColor("#006100")
-      .setRanges([
-        sheet.getRange(
-          2,
-          2,
-          numberOfMembers,
-          validRehearsals
-        )
-      ])
-      .build()
-  );
+  if (validRehearsals > 0) {
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenNumberEqualTo(5)
+        .setBackground("#C6EFCE")
+        .setFontColor("#006100")
+        .setRanges([
+          sheet.getRange(
+            2,
+            2,
+            numberOfMembers,
+            validRehearsals
+          )
+        ])
+        .build()
+    );
 
   //-----------------------------
   // Pontos (4 = Amarelo)
   //-----------------------------
 
-  rules.push(
-    SpreadsheetApp.newConditionalFormatRule()
-      .whenNumberEqualTo(4)
-      .setBackground("#FFEB9C")
-      .setFontColor("#9C6500")
-      .setRanges([
-        sheet.getRange(
-          2,
-          2,
-          numberOfMembers,
-          validRehearsals
-        )
-      ])
-      .build()
-  );
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenNumberEqualTo(4)
+        .setBackground("#FFEB9C")
+        .setFontColor("#9C6500")
+        .setRanges([
+          sheet.getRange(
+            2,
+            2,
+            numberOfMembers,
+            validRehearsals
+          )
+        ])
+        .build()
+    );
 
   //-----------------------------
   // Pontos (0 = Vermelho)
   //-----------------------------
 
-  rules.push(
-    SpreadsheetApp.newConditionalFormatRule()
-      .whenNumberEqualTo(0)
-      .setBackground("#FFC7CE")
-      .setFontColor("#9C0006")
-      .setRanges([
-        sheet.getRange(
-          2,
-          2,
-          numberOfMembers,
-          validRehearsals
-        )
-      ])
-      .build()
-  );
+    rules.push(
+      SpreadsheetApp.newConditionalFormatRule()
+        .whenNumberEqualTo(0)
+        .setBackground("#FFC7CE")
+        .setFontColor("#9C0006")
+        .setRanges([
+          sheet.getRange(
+            2,
+            2,
+            numberOfMembers,
+            validRehearsals
+          )
+        ])
+        .build()
+    );
+  }
 
   //-----------------------------
   // Percentagem >= 80%

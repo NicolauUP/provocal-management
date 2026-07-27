@@ -13,6 +13,9 @@ O objetivo é automatizar o registo de presenças, calcular assiduidade e pontua
 - Geração automática de tabela resumo
 - Conversão de presenças em pontos
 - Cálculo automático da assiduidade
+- Integração de ensaios gerais e de naipe
+- Contagem de concertos desde 01/05/2026
+- Distribuição proporcional do fundo comum
 - Formatação automática da folha de resumo
 - Conditional Formatting
 - Desenvolvimento local com VS Code + clasp
@@ -32,9 +35,9 @@ O objetivo é automatizar o registo de presenças, calcular assiduidade e pontua
 
 ### Assiduidade
 
-- [ ] Ensaios gerais
-- [ ] Ensaios de naipe
-- [ ] Concertos
+- [x] Ensaios gerais
+- [x] Ensaios de naipe
+- [x] Concertos
 - [ ] Atividades extraordinárias
 - [ ] Diferentes pesos por atividade
 
@@ -47,8 +50,8 @@ O objetivo é automatizar o registo de presenças, calcular assiduidade e pontua
 
 ### Financeiro
 
-- [ ] Distribuição automática de verbas
-- [ ] Sistema de pontos ponderados
+- [x] Distribuição automática de verbas
+- [x] Sistema de pontos ponderados
 - [ ] Exportação dos resultados
 
 ### Exportação
