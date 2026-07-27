@@ -18,3 +18,22 @@
 - [ ] Adicionar filtros ou gráficos aos mapas mensais de assiduidade.
 - [ ] Avaliar uma chave estável de membro que não dependa do nome.
 - [ ] Confirmar botões, macros e acionadores externos ao repositório.
+
+## Área pública do coro
+
+- [ ] Criar uma spreadsheet separada, destinada apenas à consulta dos membros.
+- [ ] Adicionar a ação manual `Publicar distribuição` ao menu da spreadsheet privada.
+- [ ] Restringir a publicação ao email configurado do responsável.
+- [ ] Pedir confirmação antes de cada publicação.
+- [ ] Copiar apenas valores e formatação, sem fórmulas ou ligações à spreadsheet privada.
+- [ ] Publicar a tabela de distribuição sem o resumo técnico interno.
+- [ ] Publicar os mapas mensais de assiduidade aprovados.
+- [ ] Registar no ficheiro público a data e hora da última atualização.
+- [ ] Manter os membros do coro apenas com permissões de leitura.
+- [ ] Criar um Web App público e exclusivamente de leitura.
+- [ ] Permitir selecionar livremente o nome de qualquer membro.
+- [ ] Permitir selecionar o mês a consultar.
+- [ ] Mostrar concertos, ensaios gerais e ensaios de naipe no resumo individual.
+- [ ] Mostrar estados, pontos `5/4/0`, totais e percentagem de assiduidade.
+- [ ] Garantir que o portal apresenta apenas a última versão publicada manualmente.
+- [ ] Não incluir no portal ações para editar dados, atualizar cálculos ou publicar.
