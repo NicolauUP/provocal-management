@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="pt">
+  <head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    >
+    <title>Consulta do Coro</title>
+    <style>
+      :root {
+        --navy: #17324d;
+        --navy-soft: #284b6b;
+        --gold: #d7a84b;
+        --paper: #f7f5f0;
+        --card: #ffffff;
+        --ink: #1f2933;
+        --muted: #667585;
+        --line: #dce2e7;
+        --good: #24734b;
+        --warning: #9a6811;
+        --bad: #a33a3a;
+        --shadow: 0 18px 50px rgba(23, 50, 77, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top right, #e7dcc5 0, transparent 35%),
+          var(--paper);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .hero {
+        color: white;
+        background: linear-gradient(135deg, var(--navy), #0c2237);
+        padding: 42px 20px 70px;
+      }
+
+      .hero-inner,
+      main {
+        width: min(1080px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: #ecd8ad;
+        font-size: 12px;
+        font-weight: 750;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(34px, 7vw, 58px);
+        font-weight: 500;
+        line-height: 1;
+      }
+
+      .hero p:last-child {
+        max-width: 620px;
+        margin: 16px 0 0;
+        color: #d5e0e8;
+        font-size: 16px;
+        line-height: 1.6;
+      }
+
+      main {
+        margin-top: -36px;
+        padding-bottom: 64px;
+      }
+
+      .panel,
+      .section,
+      .metric {
+        border: 1px solid rgba(220, 226, 231, 0.9);
+        border-radius: 18px;
+        background: var(--card);
+        box-shadow: var(--shadow);
+      }
+
+      .panel {
+        padding: 24px;
+      }
+
+      .filters {
+        display: grid;
+        grid-template-columns: 1.3fr 1fr auto;
+        gap: 16px;
+        align-items: end;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 7px;
+        color: var(--navy);
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      select,
+      button {
+        width: 100%;
+        min-height: 46px;
+        border-radius: 10px;
+        font: inherit;
+      }
+
+      select {
+        border: 1px solid #bfcbd5;
+        background: white;
+        padding: 0 12px;
+      }
+
+      button {
+        border: 0;
+        color: white;
+        background: var(--navy);
+        padding: 0 24px;
+        cursor: pointer;
+        font-weight: 750;
+        transition: transform 0.15s, background 0.15s;
+      }
+
+      button:hover {
+        background: var(--navy-soft);
+        transform: translateY(-1px);
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+        transform: none;
+      }
+
+      .status {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .message {
+        display: none;
+        margin-top: 18px;
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 14px;
+      }
+
+      .message.error {
+        display: block;
+        color: var(--bad);
+        background: #fff0f0;
+        border: 1px solid #f0c5c5;
+      }
+
+      .message.loading {
+        display: block;
+        color: var(--navy);
+        background: #edf4f9;
+      }
+
+      #results {
+        display: none;
+        margin-top: 28px;
+      }
+
+      .result-heading {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: end;
+        margin: 0 2px 18px;
+      }
+
+      .result-heading h2 {
+        margin: 0;
+        color: var(--navy);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(26px, 5vw, 38px);
+        font-weight: 500;
+      }
+
+      .result-heading p {
+        margin: 5px 0 0;
+        color: var(--muted);
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+      }
+
+      .metric {
+        padding: 20px;
+        box-shadow: 0 10px 24px rgba(23, 50, 77, 0.08);
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 8px;
+        color: var(--navy);
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 31px;
+        font-weight: 500;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      .section {
+        overflow: hidden;
+        box-shadow: 0 10px 24px rgba(23, 50, 77, 0.08);
+      }
+
+      .section.full {
+        grid-column: 1 / -1;
+      }
+
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        padding: 17px 20px;
+      }
+
+      .section h3 {
+        margin: 0;
+        color: var(--navy);
+        font-size: 16px;
+      }
+
+      .badge {
+        border-radius: 999px;
+        color: var(--navy);
+        background: #edf3f7;
+        padding: 4px 9px;
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid #edf0f2;
+        padding: 12px 16px;
+        text-align: left;
+        white-space: nowrap;
+      }
+
+      th {
+        color: var(--muted);
+        background: #fafbfc;
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .points {
+        font-weight: 800;
+      }
+
+      .points.good {
+        color: var(--good);
+      }
+
+      .points.warning {
+        color: var(--warning);
+      }
+
+      .points.bad {
+        color: var(--bad);
+      }
+
+      .empty {
+        margin: 0;
+        padding: 24px 20px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .distribution {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1px;
+        background: var(--line);
+      }
+
+      .distribution > div {
+        background: white;
+        padding: 18px;
+      }
+
+      .distribution span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+
+      .distribution strong {
+        display: block;
+        margin-top: 7px;
+        color: var(--navy);
+        font-size: 18px;
+      }
+
+      @media (max-width: 760px) {
+        .filters,
+        .metrics,
+        .grid,
+        .distribution {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .filters .button-field {
+          grid-column: 1 / -1;
+        }
+
+        .grid .section {
+          grid-column: 1 / -1;
+        }
+      }
+
+      @media (max-width: 500px) {
+        .hero {
+          padding-top: 30px;
+        }
+
+        .filters,
+        .metrics,
+        .distribution {
+          grid-template-columns: 1fr;
+        }
+
+        .result-heading {
+          display: block;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero-inner">
+        <p class="eyebrow">Área pública</p>
+        <h1>Consulta do Coro</h1>
+        <p>
+          Consulta a assiduidade, os concertos e a distribuição
+          da última publicação aprovada.
+        </p>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel" aria-labelledby="search-title">
+        <div class="filters">
+          <div>
+            <label id="search-title" for="member">Membro</label>
+            <select id="member" disabled>
+              <option>A carregar membros…</option>
+            </select>
+          </div>
+          <div>
+            <label for="month">Mês</label>
+            <select id="month" disabled>
+              <option>A carregar meses…</option>
+            </select>
+          </div>
+          <div class="button-field">
+            <button id="search" type="button" disabled>
+              Consultar resumo
+            </button>
+          </div>
+        </div>
+        <p class="status" id="updated"></p>
+        <div
+          id="message"
+          class="message loading"
+          role="status"
+          aria-live="polite"
+        >
+          A carregar a última publicação…
+        </div>
+      </section>
+
+      <section id="results" aria-live="polite">
+        <div class="result-heading">
+          <div>
+            <h2 id="result-name"></h2>
+            <p id="result-month"></p>
+          </div>
+        </div>
+
+        <div class="metrics">
+          <article class="metric">
+            <span>Atividades</span>
+            <strong id="metric-activities">0</strong>
+          </article>
+          <article class="metric">
+            <span>Ensaios</span>
+            <strong id="metric-rehearsals">0</strong>
+          </article>
+          <article class="metric">
+            <span>Pontos</span>
+            <strong id="metric-points">0/0</strong>
+          </article>
+          <article class="metric">
+            <span>Assiduidade</span>
+            <strong id="metric-attendance">0%</strong>
+          </article>
+        </div>
+
+        <div class="grid">
+          <article class="section">
+            <div class="section-header">
+              <h3>Concertos</h3>
+              <span class="badge" id="concert-count">0</span>
+            </div>
+            <div id="concerts"></div>
+          </article>
+
+          <article class="section">
+            <div class="section-header">
+              <h3>Ensaios</h3>
+              <span class="badge" id="rehearsal-count">0</span>
+            </div>
+            <div id="rehearsals"></div>
+          </article>
+
+          <article class="section full" id="distribution-section">
+            <div class="section-header">
+              <h3>Distribuição publicada</h3>
+            </div>
+            <div class="distribution" id="distribution"></div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const byId = id => document.getElementById(id);
+
+      function setMessage(text, type) {
+        const element = byId("message");
+        element.textContent = text || "";
+        element.className = text
+          ? `message ${type || "loading"}`
+          : "message";
+      }
+
+      function fillSelect(select, options) {
+        select.replaceChildren();
+
+        options.forEach(option => {
+          const element = document.createElement("option");
+          element.value = option.value;
+          element.textContent = option.text;
+          select.appendChild(element);
+        });
+      }
+
+      function initialize(data) {
+        fillSelect(
+          byId("member"),
+          data.nomes.map(name => ({ value: name, text: name }))
+        );
+        fillSelect(byId("month"), data.meses.map(month => ({
+          value: month.valor,
+          text: month.texto
+        })));
+
+        const hasOptions =
+          data.nomes.length > 0 && data.meses.length > 0;
+        byId("member").disabled = !hasOptions;
+        byId("month").disabled = !hasOptions;
+        byId("search").disabled = !hasOptions;
+        byId("updated").textContent = data.ultimaAtualizacao
+          ? `Última publicação: ${data.ultimaAtualizacao}`
+          : "";
+        setMessage(
+          hasOptions
+            ? ""
+            : "Ainda não existem dados publicados para consulta.",
+          hasOptions ? "" : "error"
+        );
+      }
+
+      function handleError(error) {
+        byId("search").disabled = false;
+        const message = error && error.message
+          ? error.message.replace(/^Error:\s*/i, "")
+          : "Não foi possível carregar os dados.";
+        setMessage(
+          message,
+          "error"
+        );
+      }
+
+      function createTable(headers, rows) {
+        if (rows.length === 0) {
+          const empty = document.createElement("p");
+          empty.className = "empty";
+          empty.textContent = "Sem registos neste mês.";
+          return empty;
+        }
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "table-wrap";
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        const headRow = document.createElement("tr");
+
+        headers.forEach(header => {
+          const th = document.createElement("th");
+          th.textContent = header;
+          headRow.appendChild(th);
+        });
+
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+        const tbody = document.createElement("tbody");
+
+        rows.forEach(row => {
+          const tr = document.createElement("tr");
+
+          row.forEach((value, index) => {
+            const td = document.createElement("td");
+            td.textContent = value;
+
+            if (index === row.length - 1 && row.length > 3) {
+              const points = Number.parseInt(value, 10);
+              td.className = "points " + (
+                points >= 5
+                  ? "good"
+                  : points === 4
+                    ? "warning"
+                    : "bad"
+              );
+            }
+
+            tr.appendChild(td);
+          });
+
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        wrapper.appendChild(table);
+        return wrapper;
+      }
+
+      function addDistributionItem(container, label, value) {
+        const item = document.createElement("div");
+        const title = document.createElement("span");
+        const content = document.createElement("strong");
+        title.textContent = label;
+        content.textContent = value;
+        item.append(title, content);
+        container.appendChild(item);
+      }
+
+      function formatCurrency(value) {
+        return new Intl.NumberFormat("pt-PT", {
+          style: "currency",
+          currency: "EUR"
+        }).format(Number(value) || 0);
+      }
+
+      function render(data) {
+        byId("search").disabled = false;
+        setMessage("");
+        byId("results").style.display = "block";
+        byId("result-name").textContent = data.nome;
+        byId("result-month").textContent = data.mesTexto;
+        byId("metric-activities").textContent =
+          data.resumo.atividades;
+        byId("metric-rehearsals").textContent =
+          data.resumo.ensaios;
+        byId("metric-points").textContent =
+          `${data.resumo.pontosObtidos}/${data.resumo.pontosMaximos}`;
+        byId("metric-attendance").textContent =
+          new Intl.NumberFormat("pt-PT", {
+            style: "percent",
+            maximumFractionDigits: 1
+          }).format(data.resumo.assiduidade);
+        byId("concert-count").textContent =
+          data.concertos.length;
+        byId("rehearsal-count").textContent =
+          data.ensaios.length;
+
+        const concerts = data.concertos.map(item => [
+          item.data,
+          item.resposta
+        ]);
+        const rehearsals = data.ensaios.map(item => [
+          item.data,
+          item.origem,
+          item.resposta,
+          `${item.pontosObtidos}/${item.pontosMaximos}`
+        ]);
+
+        byId("concerts").replaceChildren(
+          createTable(["Data", "Resposta"], concerts)
+        );
+        byId("rehearsals").replaceChildren(
+          createTable(
+            ["Data", "Origem", "Resposta", "Pontos"],
+            rehearsals
+          )
+        );
+
+        const distribution = byId("distribution");
+        distribution.replaceChildren();
+
+        if (data.distribuicao) {
+          addDistributionItem(
+            distribution,
+            "Pontos finais",
+            Number(data.distribuicao.pontos).toFixed(3)
+          );
+          addDistributionItem(
+            distribution,
+            "Fundo comum",
+            formatCurrency(data.distribuicao.valorFundoComum)
+          );
+          addDistributionItem(
+            distribution,
+            "Individual + apoios",
+            formatCurrency(
+              data.distribuicao.valorIndividual +
+              data.distribuicao.valorApoios
+            )
+          );
+          addDistributionItem(
+            distribution,
+            "Valor final",
+            formatCurrency(data.distribuicao.valorFinal)
+          );
+          byId("distribution-section").style.display = "block";
+        } else {
+          byId("distribution-section").style.display = "none";
+        }
+
+        byId("results").scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+      }
+
+      byId("search").addEventListener("click", () => {
+        byId("search").disabled = true;
+        setMessage("A carregar o resumo…", "loading");
+
+        google.script.run
+          .withSuccessHandler(render)
+          .withFailureHandler(handleError)
+          .consultarResumoIndividual(
+            byId("member").value,
+            byId("month").value
+          );
+      });
+
+      google.script.run
+        .withSuccessHandler(initialize)
+        .withFailureHandler(handleError)
+        .obterOpcoesConsultaPublica();
+    </script>
+  </body>
+</html>

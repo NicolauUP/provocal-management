@@ -20,6 +20,14 @@ A mesma análise alimenta:
 - `gerarMapaAssiduidadeMensal`;
 - `diagnosticarAssiduidade`.
 
+A função `publicarDistribuicao` copia manualmente a distribuição e os mapas
+mensais para uma spreadsheet de consulta. A execução é limitada aos emails
+configurados e publica valores calculados, sem fórmulas nem folhas privadas.
+
+O snapshot `_Dados_Consulta`, criado apenas durante a publicação manual,
+alimenta o Web App de consulta individual. O portal permite escolher membro
+e mês, mas não expõe funções de escrita, recálculo ou publicação.
+
 ## Regras consolidadas
 
 - Apenas membros ativos entram nos resultados.

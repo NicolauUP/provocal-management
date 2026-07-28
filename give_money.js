@@ -48,7 +48,11 @@ const DISTRIBUICAO_CONFIG = {
     },
 
     presencas: {
-      timestamp: ["Timestamp"],
+      timestamp: [
+        "Timestamp",
+        "Timestap",
+        "Carimbo de data/hora"
+      ],
       tipoAtividade: [
         "Tipo de Atividade",
         "Tipo de atividade",
@@ -59,6 +63,7 @@ const DISTRIBUICAO_CONFIG = {
         "Data ",
         "Data da Atividade",
         "Data de Atividade",
+        "Data do Ensaio",
         "Data do Ensaio:"
       ]
     },
@@ -1297,6 +1302,11 @@ function onOpen() {
     .addItem(
       "Gerar mapa mensal",
       "gerarMapaAssiduidadeMensal"
+    )
+    .addSeparator()
+    .addItem(
+      "Publicar distribuição",
+      "publicarDistribuicao"
     )
     .addToUi();
 }

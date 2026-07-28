@@ -17,6 +17,23 @@ O objetivo é automatizar o registo de presenças, calcular assiduidade e pontua
 - Contagem de concertos desde 01/05/2026
 - Distribuição proporcional do fundo comum
 - Mapas mensais de assiduidade com pontos por ensaio
+- Publicação manual da distribuição e dos mapas numa spreadsheet de consulta
+- Portal Web de consulta individual por membro e mês
+
+## Portal público
+
+O portal lê apenas o último snapshot criado por `Publicar distribuição`.
+Para o disponibilizar:
+
+1. Enviar o código manualmente com `clasp push`.
+2. No editor do Apps Script, escolher `Implementar` → `Nova implementação`.
+3. Selecionar `Aplicação Web`.
+4. Executar como o proprietário do projeto.
+5. Escolher quem pode aceder e concluir a implementação.
+6. Partilhar o URL terminado em `/exec`.
+
+Depois de alterar o código do portal, é necessário criar uma nova versão da
+implementação. O portal não contém operações de escrita ou publicação.
 - Formatação automática da folha de resumo
 - Conditional Formatting
 - Desenvolvimento local com VS Code + clasp
