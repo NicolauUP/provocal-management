@@ -20,20 +20,20 @@ O objetivo é automatizar o registo de presenças, calcular assiduidade e pontua
 - Publicação manual da distribuição e dos mapas numa spreadsheet de consulta
 - Portal Web de consulta individual por membro e mês
 
-## Portal público
+## Portal individual
 
-O portal lê apenas o último snapshot criado por `Publicar distribuição`.
-Para o disponibilizar:
+O portal individual autenticado vive no projeto separado
+[`portal-individual`](portal-individual). O projeto administrativo não deve ser
+implementado como aplicação web pública: contém funções de cálculo e de
+publicação. A consulta usa um snapshot privado atualizado manualmente por
+`Publicar distribuição`.
 
-1. Enviar o código manualmente com `clasp push`.
-2. No editor do Apps Script, escolher `Implementar` → `Nova implementação`.
-3. Selecionar `Aplicação Web`.
-4. Executar como o proprietário do projeto.
-5. Escolher quem pode aceder e concluir a implementação.
-6. Partilhar o URL terminado em `/exec`.
+### Regra de estabilidade
 
-Depois de alterar o código do portal, é necessário criar uma nova versão da
-implementação. O portal não contém operações de escrita ou publicação.
+A estrutura atual do portal individual — abas **O meu resumo** e **Coro**,
+resumo de assiduidade, atividades, valores, listas e gráfico — é a referência
+aprovada. Não deve ser reorganizada nem substituída em atualizações futuras sem
+um pedido explícito.
 - Formatação automática da folha de resumo
 - Conditional Formatting
 - Desenvolvimento local com VS Code + clasp

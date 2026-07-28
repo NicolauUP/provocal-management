@@ -38,6 +38,7 @@ const DISTRIBUICAO_CONFIG = {
     membros: {
       ordem: ["Ordem"],
       nome: ["Nome"],
+      email: ["Email", "E-mail"],
       entrada: ["Entrada", "Data de Entrada"],
       estado: ["Estado"]
     },
@@ -57,6 +58,10 @@ const DISTRIBUICAO_CONFIG = {
         "Tipo de Atividade",
         "Tipo de atividade",
         "Tipo da Atividade"
+      ],
+      nomeConcerto: [
+        "Nome da Atividade",
+        "Nome do Concerto"
       ],
 
       dataAtividade: [
@@ -247,6 +252,12 @@ function lerMembrosAtivos_(spreadsheet) {
     nomeFolha
   );
 
+  const indiceEmail = encontrarIndiceCabecalho_(
+    cabecalhos,
+    DISTRIBUICAO_CONFIG.cabecalhos.membros.email,
+    false
+  );
+
   const indiceEstado = encontrarIndiceCabecalho_(
     cabecalhos,
     DISTRIBUICAO_CONFIG.cabecalhos.membros.estado,
@@ -295,6 +306,9 @@ function lerMembrosAtivos_(spreadsheet) {
           : membros.length + 1,
       nome: nome,
       chaveNome: normalizarNome_(nome),
+      email: indiceEmail >= 0
+        ? String(linha[indiceEmail] ?? "").trim().toLowerCase()
+        : "",
       entrada: converterData_(linha[indiceEntrada]),
       linhaOriginal: i + 1
     });
@@ -591,11 +605,19 @@ function lerFontePresencas_(
         nomeFolha
       )
     : -1;
+  const indiceNomeConcerto = opcoes.tipo === "geral"
+    ? encontrarIndiceCabecalho_(
+        cabecalhos,
+        configCabecalhos.nomeConcerto,
+        false
+      )
+    : -1;
 
   const indicesMetadados = new Set([
     indiceTimestamp,
     indiceData,
-    indiceTipo
+    indiceTipo,
+    indiceNomeConcerto
   ]);
   const colunasPresencas = [];
   const chavesEncontradas = new Set();
@@ -649,6 +671,7 @@ function lerFontePresencas_(
     dados,
     indiceData,
     indiceTipo,
+    indiceNomeConcerto,
     colunasPresencas,
     nomesDesconhecidos,
     semMembrosAtivos: colunasPresencas.length === 0
@@ -695,6 +718,9 @@ function processarFontePresencas_(
     const tipoRegisto = fonte.tipo === "naipe"
       ? "Ensaio de naipe"
       : tipoOriginal;
+    const nomeConcerto = fonte.indiceNomeConcerto >= 0
+      ? String(linha[fonte.indiceNomeConcerto] ?? "").trim()
+      : "";
 
     for (const coluna of fonte.colunasPresencas) {
       const membro = membrosPorChave[coluna.chaveNome];
@@ -708,6 +734,7 @@ function processarFontePresencas_(
         dataValida,
         tipoNormalizado,
         tipoRegisto,
+        nomeConcerto,
         respostaOriginal,
         membro,
         origemNaipe: fonte.tipo === "naipe"
@@ -833,6 +860,7 @@ function avaliarRegistoPresenca_(dados) {
     linha: dados.linha,
     data: dados.dataValida ? dados.dataAtividade : null,
     tipoRegisto: dados.tipoRegisto,
+    nomeConcerto: dados.nomeConcerto,
     ehEnsaio: dados.tipoNormalizado === tipoEnsaio,
     nomeMembro: dados.membro.nome,
     chaveNome: dados.membro.chaveNome,

@@ -60,6 +60,7 @@ function publicarDistribuicao() {
     spreadsheetOrigem,
     spreadsheetDestino
   );
+  publicarDadosPortalPrivado_(spreadsheetOrigem);
 
   escreverInformacaoPublicacao_(
     spreadsheetDestino,
@@ -78,6 +79,265 @@ function publicarDistribuicao() {
     ].join("\n"),
     ui.ButtonSet.OK
   );
+}
+
+/**
+ * Publica um snapshot mínimo e privado para o projeto Apps Script do portal.
+ * Só membros ativos com Email preenchido entram neste ficheiro. Não é uma
+ * folha pública e não deve ser partilhada com membros do coro.
+ */
+function publicarDadosPortalPrivado_(spreadsheetOrigem) {
+  const membros = lerMembrosAtivos_(spreadsheetOrigem);
+  const membrosComEmail = validarMembrosPortalPrivado_(membros);
+  const analise = analisarParticipacao_(
+    spreadsheetOrigem,
+    membrosComEmail
+  );
+  const dados = criarDadosPortalPrivado_(
+    membrosComEmail,
+    analise.detalhes
+  );
+  const spreadsheetDestino = SpreadsheetApp.openById(
+    PUBLICATION.PRIVATE_PORTAL_SPREADSHEET_ID
+  );
+  let folha = spreadsheetDestino.getSheetByName(
+    PUBLICATION.PRIVATE_PORTAL_DATA_SHEET
+  );
+
+  if (!folha) {
+    folha = spreadsheetDestino.insertSheet(
+      PUBLICATION.PRIVATE_PORTAL_DATA_SHEET
+    );
+  }
+
+  prepararFolhaDestino_(
+    folha,
+    Math.max(dados.length, 1),
+    dados[0].length
+  );
+  folha
+    .getRange(1, 1, dados.length, dados[0].length)
+    .setValues(dados);
+  folha
+    .getRange(1, 1, 1, dados[0].length)
+    .setFontWeight("bold")
+    .setBackground("#1F4E78")
+    .setFontColor("#FFFFFF");
+  folha.getRange(2, 3, Math.max(dados.length - 1, 1), 1)
+    .setNumberFormat("dd/MM/yyyy");
+  folha.getRange(2, 4, Math.max(dados.length - 1, 1), 1)
+    .setNumberFormat("@");
+  folha.setFrozenRows(1);
+  folha.autoResizeColumns(1, dados[0].length);
+
+  publicarValoresPortalPrivados_(
+    spreadsheetOrigem,
+    spreadsheetDestino,
+    membrosComEmail
+  );
+  publicarResumoGlobalPortalPrivado_(
+    spreadsheetOrigem,
+    spreadsheetDestino
+  );
+}
+
+function publicarValoresPortalPrivados_(
+  spreadsheetOrigem,
+  spreadsheetDestino,
+  membros
+) {
+  const folhaOrigem = obterFolhaObrigatoria_(
+    spreadsheetOrigem,
+    SHEETS.DISTRIBUTION
+  );
+  const dadosOrigem = folhaOrigem.getDataRange().getValues();
+  const cabecalhos = dadosOrigem[0];
+  const indiceNome = encontrarIndiceCabecalho_(
+    cabecalhos,
+    [DISTRIBUICAO_CONFIG.cabecalhos.distribuicao.nome],
+    true,
+    folhaOrigem.getName()
+  );
+  const campos = [
+    "pontos",
+    "valorFundoComum",
+    "valorIndividual",
+    "valorApoios",
+    "valorFinal"
+  ];
+  const indices = {};
+
+  campos.forEach(campo => {
+    indices[campo] = encontrarIndiceCabecalho_(
+      cabecalhos,
+      [DISTRIBUICAO_CONFIG.cabecalhos.distribuicao[campo]],
+      true,
+      folhaOrigem.getName()
+    );
+  });
+
+  const valoresPorMembro = {};
+  dadosOrigem.slice(1).forEach(linha => {
+    valoresPorMembro[normalizarNome_(linha[indiceNome])] = linha;
+  });
+
+  const dadosDestino = [[
+    "Email",
+    "Nome",
+    "Pontos Finais",
+    "Valor Fundo Comum",
+    "Valor Individual",
+    "Valor Apoios",
+    "Valor Final"
+  ], ...membros.map(membro => {
+    const linha = valoresPorMembro[membro.chaveNome] || [];
+    return [
+      membro.email,
+      membro.nome,
+      Number(linha[indices.pontos]) || 0,
+      Number(linha[indices.valorFundoComum]) || 0,
+      Number(linha[indices.valorIndividual]) || 0,
+      Number(linha[indices.valorApoios]) || 0,
+      Number(linha[indices.valorFinal]) || 0
+    ];
+  })];
+  let folhaDestino = spreadsheetDestino.getSheetByName(
+    PUBLICATION.PRIVATE_PORTAL_VALUES_SHEET
+  );
+
+  if (!folhaDestino) {
+    folhaDestino = spreadsheetDestino.insertSheet(
+      PUBLICATION.PRIVATE_PORTAL_VALUES_SHEET
+    );
+  }
+
+  prepararFolhaDestino_(
+    folhaDestino,
+    dadosDestino.length,
+    dadosDestino[0].length
+  );
+  folhaDestino.getRange(1, 1, dadosDestino.length, dadosDestino[0].length)
+    .setValues(dadosDestino);
+  folhaDestino.getRange(1, 1, 1, dadosDestino[0].length)
+    .setFontWeight("bold")
+    .setBackground("#1F4E78")
+    .setFontColor("#FFFFFF");
+  folhaDestino.getRange(2, 4, Math.max(dadosDestino.length - 1, 1), 4)
+    .setNumberFormat("#,##0.00 €");
+  folhaDestino.setFrozenRows(1);
+  folhaDestino.autoResizeColumns(1, dadosDestino[0].length);
+}
+
+function publicarResumoGlobalPortalPrivado_(origem, destino) {
+  const folha = obterFolhaObrigatoria_(origem, SHEETS.DISTRIBUTION);
+  const dados = folha.getDataRange().getValues();
+  const cabecalhos = dados[0];
+  const indiceNome = encontrarIndiceCabecalho_(cabecalhos, ["Nome"], true, folha.getName());
+  const indicePontos = encontrarIndiceCabecalho_(cabecalhos, ["Pontos"], true, folha.getName());
+  const indiceFundo = encontrarIndiceCabecalho_(cabecalhos, ["Valor Fundo Comum"], true, folha.getName());
+  const total = dados.slice(1).find(linha => normalizarTexto_(linha[indiceNome]) === "total") || [];
+  const pontos = Number(total[indicePontos]) || 0;
+  const fundo = Number(total[indiceFundo]) || 0;
+  let destinoFolha = destino.getSheetByName(PUBLICATION.PRIVATE_PORTAL_GLOBAL_SHEET);
+  if (!destinoFolha) destinoFolha = destino.insertSheet(PUBLICATION.PRIVATE_PORTAL_GLOBAL_SHEET);
+  const resumo = [["Fundo comum distribuível", "Valor por ponto", "Pontos finais do coro"], [fundo, pontos ? fundo / pontos : 0, pontos]];
+  prepararFolhaDestino_(destinoFolha, 2, 3);
+  destinoFolha.getRange(1, 1, 2, 3).setValues(resumo);
+  destinoFolha.getRange(1, 1, 1, 3).setFontWeight("bold").setBackground("#1F4E78").setFontColor("#FFFFFF");
+  destinoFolha.getRange(2, 1, 1, 2).setNumberFormat("#,##0.00 €");
+  destinoFolha.setFrozenRows(1);
+}
+
+function validarMembrosPortalPrivado_(membros) {
+  const emails = {};
+
+  return membros.filter(membro => {
+    const email = String(membro.email || "").trim().toLowerCase();
+
+    if (!email) {
+      return false;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error(
+        `O Email do membro "${membro.nome}" não é válido.`
+      );
+    }
+
+    if (emails[email]) {
+      throw new Error(
+        `O Email "${email}" está repetido em Membros.`
+      );
+    }
+
+    emails[email] = true;
+    return true;
+  });
+}
+
+function criarDadosPortalPrivado_(membros, detalhes) {
+  const cabecalhos = [
+    "Email",
+    "Nome",
+    "Data",
+    "Mês",
+    "Origem",
+    "Tipo",
+    "Nome da Atividade",
+    "Resposta",
+    "Pontos obtidos",
+    "Pontos máximos",
+    "Conta como atividade"
+  ];
+  const emailPorMembro = {};
+  const tipoConcerto = normalizarTexto_(
+    DISTRIBUICAO_CONFIG.valores.tipoConcerto
+  );
+
+  membros.forEach(membro => {
+    emailPorMembro[membro.chaveNome] = membro.email;
+  });
+
+  const linhas = detalhes
+    .filter(detalhe => {
+      if (!(detalhe.data instanceof Date)) {
+        return false;
+      }
+
+      if (compararApenasData_(detalhe.data, ACTIVITIES_START_DATE) < 0) {
+        return false;
+      }
+
+      if (detalhe.ehEnsaio) {
+        return detalhe.entraDenominador;
+      }
+
+      return (
+        normalizarTexto_(detalhe.tipoRegisto) === tipoConcerto &&
+        detalhe.entraCalculo
+      );
+    })
+    .sort((a, b) =>
+      a.nomeMembro.localeCompare(b.nomeMembro, "pt") ||
+      a.data.getTime() - b.data.getTime()
+    )
+    .map(detalhe => [
+      emailPorMembro[detalhe.chaveNome],
+      detalhe.nomeMembro,
+      detalhe.data,
+      criarChaveMes_(detalhe.data),
+      obterNomeOrigemPublica_(detalhe.folha),
+      detalhe.ehEnsaio
+        ? detalhe.tipoRegisto
+        : DISTRIBUICAO_CONFIG.valores.tipoConcerto,
+      detalhe.nomeConcerto || "",
+      detalhe.resposta || "Sem resposta",
+      detalhe.pontosObtidos,
+      detalhe.pontosMaximos,
+      detalhe.contaComoAtividade
+    ]);
+
+  return [cabecalhos, ...linhas];
 }
 
 /**
